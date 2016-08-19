@@ -69,7 +69,9 @@ public class ConfigDataModel implements DataModel, ConfigurationControl {
 
 	/** DebugLogger für Debug-Ausgaben */
 	private static final Debug _debug = Debug.getLogger();
-	public static final int PROTOCOL_VERSION = 1;
+	
+	/** Maximal unterstützte Protokollversion */
+	public static final int PROTOCOL_VERSION = 2;
 
 	/** Zugriff auf die Verwaltungsdaten der Konfiguration. */
 	private final ConfigurationManagementFile _managementFile;

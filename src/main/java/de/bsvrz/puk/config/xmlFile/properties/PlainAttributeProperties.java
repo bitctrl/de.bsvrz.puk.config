@@ -26,8 +26,6 @@
  */
 package de.bsvrz.puk.config.xmlFile.properties;
 
-import de.bsvrz.dav.daf.main.config.SystemObjectInfo;
-
 /**
  * Kapselt die Eigenschaften eines Attributs in Versorgungsdateien entsprechend K2S.DTD.
  *

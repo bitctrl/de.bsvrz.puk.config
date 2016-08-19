@@ -89,7 +89,7 @@ public class ConfigFileBackupTask {
 	/**
 	 * Erstellt einen neuen ConfigFileBackupTask, welches den Fortschritt an ein lokales BackupProgressCallback-Objekt übergibt
 	 *
-	 * @param authentication         Klasse von der die Benutzerverwaltung.xml gesichert werden soll
+	 * @param authentication         Klasse von der die benutzerverwaltung.xml gesichert werden soll
 	 * @param dataModel              Lokale Konfiguration
 	 * @param target                 Zielverzeichnis, welches innerhalb von {@link de.bsvrz.puk.config.configFile.datamodel.ConfigDataModel#getBackupBaseDirectory()}
 	 *                               angelegt werden soll.
@@ -108,7 +108,7 @@ public class ConfigFileBackupTask {
 	/**
 	 * Erstellt einen neuen ConfigFileBackupTask, welches den Fortschritt über den Datenverteiler an ein RemoteRequester übermittelt
 	 *
-	 * @param authentication         Klasse von der die Benutzerverwaltung.xml gesichert werden soll
+	 * @param authentication         Klasse von der die benutzerverwaltung.xml gesichert werden soll
 	 * @param dataModel              Lokale Konfiguration
 	 * @param target                 Zielverzeichnis, welches innerhalb von {@link de.bsvrz.puk.config.configFile.datamodel.ConfigDataModel#getBackupBaseDirectory()}
 	 *                               angelegt werden soll.
@@ -131,7 +131,7 @@ public class ConfigFileBackupTask {
 	/**
 	 * Erstellt einen neuen ConfigFileBackupTask, welches keinerlei Fortschrittsmeldungen sendet.
 	 *
-	 * @param authentication         Klasse von der die Benutzerverwaltung.xml gesichert werden soll. Kann null sein, dann wird keine
+	 * @param authentication         Klasse von der die benutzerverwaltung.xml gesichert werden soll. Kann null sein, dann wird keine
 	 *                               Benutzerverwaltung gesichert.
 	 * @param dataModel              Lokale Konfiguration
 	 * @param target                 Zielverzeichnis, welches innerhalb von {@link de.bsvrz.puk.config.configFile.datamodel.ConfigDataModel#getBackupBaseDirectory()}
@@ -380,7 +380,7 @@ public class ConfigFileBackupTask {
 					}
 					catch(IOException e) {
 						_failed++;
-						_debug.error("Fehler beim Sichern der Benutzerverwaltung.xml", e);
+						_debug.error("Fehler beim Sichern der benutzerverwaltung.xml", e);
 					}
 				}
 			}

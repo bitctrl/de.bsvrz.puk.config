@@ -42,6 +42,7 @@ import de.bsvrz.puk.config.configFile.datamodel.*;
 import de.bsvrz.puk.config.configFile.fileaccess.ConfigFileBackupTask;
 import de.bsvrz.puk.config.main.authentication.Authentication;
 import de.bsvrz.puk.config.main.authentication.ConfigAuthentication;
+import de.bsvrz.puk.config.main.authentication.SrpUserAdministrationReceiver;
 import de.bsvrz.puk.config.main.communication.UnknownObject;
 import de.bsvrz.puk.config.main.communication.async.AsyncIdsToObjectsRequest;
 import de.bsvrz.puk.config.main.simulation.ConfigSimulationObject;
@@ -548,6 +549,8 @@ public class ConfigurationQueryManager implements SimulationHandler {
 		private Map<PublishingMutableCollectionChangeListener, PublishingMutableCollectionChangeListener> _mutableCollectionChangeHandlers = new HashMap<PublishingMutableCollectionChangeListener, PublishingMutableCollectionChangeListener>();
 
 		private HashMap<PublishingCommunicationStateListener, PublishingCommunicationStateListener> _communicationChangedHandlers = new HashMap<PublishingCommunicationStateListener, PublishingCommunicationStateListener>();
+		
+		private final SrpUserAdministrationReceiver _srpUserAdministrationReceiver;
 
 		/**
 		 * Bearbeitet Konfigurationsanfragen und reicht diese an das Datenmodell weiter und verschickt anschließend die Antwort.
@@ -567,6 +570,8 @@ public class ConfigurationQueryManager implements SimulationHandler {
 			_worker.start();
 			if(simulationVariant > 0 && simulationObject == null) throw new IllegalStateException("Für eine Simulation wurde kein Simulationsobjekt angegeben");
 			_simulationObject = simulationObject;
+
+			_srpUserAdministrationReceiver = new SrpUserAdministrationReceiver(_authentication);
 
 			// Die Anfragen müssen identifiziert werden (über ihre Datenidentifikation), aus diesem Grund wird an dieser Stelle
 			// die erwarteten/unterstützten Identifikationen erzeugt.
@@ -1693,8 +1698,19 @@ public class ConfigurationQueryManager implements SimulationHandler {
 								final String usedEncryptionProcessName = deserializer.readString();
 								final int lengthOfData = deserializer.readInt();
 								final byte[] encryptedTask = deserializer.readBytes(lengthOfData);
-
-								serializer.writeInt(_authentication.processTask(username, encryptedTask, usedEncryptionProcessName));
+								if(usedEncryptionProcessName.equals("SrpRequest")){
+									_srpUserAdministrationReceiver.processSrpRequest
+											(serializer, username);
+								}
+								else if(usedEncryptionProcessName.equals("SrpValidateRequest")){
+									_srpUserAdministrationReceiver.processValidateRequest(serializer, encryptedTask);
+								}
+								else if(usedEncryptionProcessName.equals("SrpEncrypted")){
+									_srpUserAdministrationReceiver.processTask(serializer, encryptedTask);
+								}
+								else {
+									serializer.writeInt(_authentication.processTask(username, encryptedTask, usedEncryptionProcessName));
+								}
 								messageType = "AuftragBenutzerverwaltungAntwort";
 							}
 							else if("AuftragZufallstext".equals(queryType)) {
@@ -1718,7 +1734,7 @@ public class ConfigurationQueryManager implements SimulationHandler {
 						}
 						catch(ConfigurationTaskException e) {
 							// Die Konfiguration lehnt es ab den Auftrag zu bearbeiten
-							final String errorMessage = "Die Konfiguration lehnt den Auftrag ab: " + e;
+							final String errorMessage = "Die Konfiguration lehnt den Auftrag ab: " + e.getMessage();
 							serializer.writeString(errorMessage);
 							messageType = "KonfigurationsauftragVerweigert";
 						}

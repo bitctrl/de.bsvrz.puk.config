@@ -1074,24 +1074,19 @@ class ConfigurationRequesterCommunicator {
 		clientInfo.sendData(isWriteRequest, result);
 	}
 
-	private static long[] getIds(List<ObjectSet> systemObjects) {
+	private static long[] getIds(List<? extends SystemObject> systemObjects) {
 		long[] ids = new long[systemObjects.size()];
 		int i = 0;
-		Iterator<ObjectSet> iterator = systemObjects.iterator();
-		while(iterator.hasNext()) {
-			ids[i++] = (iterator.next()).getId();
+		for(final SystemObject systemObject : systemObjects) {
+			ids[i++] = systemObject.getId();
 		}
 		return ids;
 	}
 
-	private static ArrayList<Long> getIdsAsLongArrayList(List<SystemObject> systemObjects) {
+	private static ArrayList<Long> getIdsAsLongArrayList(List<? extends SystemObject> systemObjects) {
 		ArrayList<Long> ids = new ArrayList<Long>(systemObjects.size());
-		int i = 0;
-		Iterator<SystemObject> iterator = systemObjects.iterator();
-		while(iterator.hasNext()) {
-			SystemObject element = iterator.next();
-			//System.out.println("adding " + element.getId());
-			ids.add(new Long(element.getId()));
+		for(final SystemObject element : systemObjects) {
+			ids.add(element.getId());
 		}
 		return ids;
 	}
@@ -1335,7 +1330,7 @@ class ConfigurationRequesterCommunicator {
 						o.getId(), o.getPid(), o.getName(), o.getType().getId(), state, //state 1=existent
 						null, //error
 						null, //DataModel
-						o.getValidSince(), o.getNotValidSince(), o.getConfigurationArea().getId(), getIds(o.getObjectSets()), getIdsAsLongArrayList(o.getElements())
+						o.getValidSince(), o.getNotValidSince(), o.getConfigurationArea().getId(), getIds(o.getObjectSets()), getIds(o.getElements())
 				);
 			}
 			else if(object instanceof NonMutableSet) {

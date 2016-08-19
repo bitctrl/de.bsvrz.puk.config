@@ -26,37 +26,27 @@
 
 package de.bsvrz.puk.config.main.authentication;
 
+import de.bsvrz.dav.daf.communication.protocol.UserLogin;
+import de.bsvrz.dav.daf.communication.srpAuthentication.*;
 import de.bsvrz.dav.daf.main.Data;
 import de.bsvrz.dav.daf.main.DataAndATGUsageInformation;
-import de.bsvrz.dav.daf.main.config.AttributeGroupUsage;
-import de.bsvrz.dav.daf.main.config.ConfigurationChangeException;
-import de.bsvrz.dav.daf.main.config.ConfigurationTaskException;
-import de.bsvrz.sys.funclib.dataSerializer.Deserializer;
-import de.bsvrz.sys.funclib.dataSerializer.NoSuchVersionException;
-import de.bsvrz.sys.funclib.dataSerializer.SerializingFactory;
+import de.bsvrz.dav.daf.main.authentication.ClientCredentials;
+import de.bsvrz.dav.daf.main.config.*;
 import de.bsvrz.dav.daf.main.impl.config.request.RequestException;
-import de.bsvrz.dav.daf.main.config.ConfigurationException;
-import de.bsvrz.dav.daf.main.config.DataModel;
-import de.bsvrz.dav.daf.main.config.SystemObject;
-import de.bsvrz.dav.daf.main.config.DynamicObjectType;
-import de.bsvrz.dav.daf.main.config.ConfigurationArea;
-import de.bsvrz.dav.daf.main.config.SystemObjectType;
 import de.bsvrz.sys.funclib.crypt.EncryptDecryptProcedure;
 import de.bsvrz.sys.funclib.crypt.decrypt.DecryptFactory;
 import de.bsvrz.sys.funclib.crypt.encrypt.EncryptFactory;
+import de.bsvrz.sys.funclib.dataSerializer.Deserializer;
+import de.bsvrz.sys.funclib.dataSerializer.NoSuchVersionException;
+import de.bsvrz.sys.funclib.dataSerializer.SerializingFactory;
 import de.bsvrz.sys.funclib.debug.Debug;
-import de.bsvrz.sys.funclib.xmlSupport.CountingErrorHandler;
 import de.bsvrz.sys.funclib.filelock.FileLock;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.DocumentType;
-import org.w3c.dom.Element;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import de.bsvrz.sys.funclib.xmlSupport.CountingErrorHandler;
+import org.w3c.dom.*;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -69,19 +59,14 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
+import java.math.BigInteger;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.*;
 
 /**
@@ -128,6 +113,11 @@ public class ConfigAuthentication implements Authentication {
 	private DataModel _dataModel;
 
 	private final FileLock _lockAuthenticationFile;
+
+	/**
+	 * Geheimer Zufallstext, der für die Erzeugung von Fake-Verifiern benutzt wird
+	 */
+	private static final String _secretToken = new BigInteger(64, new SecureRandom()).toString(16);
 
 	/**
 	 * Lädt alle Informationen aus der angegebenen Datei. Ist die Datei nicht vorhanden, wird eine Datei mit allen Grundeinstellungen erzeugt.
@@ -256,6 +246,7 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+	@Deprecated
 	public void isValidUser(final String username, final byte[] encryptedPassword, final String authentificationText, final String authentificationProcessName)
 			throws Exception {
 
@@ -264,7 +255,7 @@ public class ConfigAuthentication implements Authentication {
 
 		if(_userAccounts.containsKey(username)) {
 			final byte[] originalEncryptedPassword = EncryptFactory.getEncryptInstance(usedDecryptProcedure).encrypt(
-					_userAccounts.get(username).getPassword(), authentificationText
+					new String(_userAccounts.get(username).getClientCredentials().getPassword()), authentificationText
 			);
 
 			//Prüfen, ob das Passwort übereinstimmt
@@ -281,6 +272,7 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+	@Deprecated
 	public byte[] getText() {
 		final Random rand = new Random();
 		final Long randomLong = new Long(rand.nextLong());
@@ -348,10 +340,11 @@ public class ConfigAuthentication implements Authentication {
 	 * @param encryptedMessage	  verschlüsselte Aufgabe, die ausgeführt werden soll
 	 * @param authentificationProcessName  Entschlüsselungsverfahren
 	 * @return Die Rückgabe des ausgeführten Tasks (beispielsweise die Anzahl der verbleibenden Einmalpasswörter, falls danach gefragt wurde.
-	 * {@link de.bsvrz.puk.config.main.authentication.ConfigAuthentication.UserAccount#NO_RESULT} (-1) falls die Aufgabe keine Rückgabe liefert.
+	 * {@link UserAccount#NO_RESULT} (-1) falls die Aufgabe keine Rückgabe liefert.
 	 * @throws RequestException Fehler in der Anfrage
 	 * @throws ConfigurationTaskException Fehler beim Ausführen der Anweisung
 	 */
+	@Deprecated
 	public int processTask(String usernameCustomer, byte[] encryptedMessage, String authentificationProcessName)
 			throws RequestException, ConfigurationTaskException {
 		if(_userAccounts.containsKey(usernameCustomer)) {
@@ -365,8 +358,9 @@ public class ConfigAuthentication implements Authentication {
 
 				byte[] decryptedMessage;
 				try {
+					String passwordString = new String(_userAccounts.get(usernameCustomer).getClientCredentials().getPassword());
 					decryptedMessage = DecryptFactory.getDecryptInstance(encryptDecryptProcedure).decrypt(
-							encryptedMessage, _userAccounts.get(usernameCustomer).getPassword()
+							encryptedMessage, passwordString
 					);
 				}
 				catch(Exception e) {
@@ -444,21 +438,13 @@ public class ConfigAuthentication implements Authentication {
 					}
 					case 9: {
 						//  Neuer Benutzer inklusive konfigurierender Datensätze
-						createNewUser(
-								usernameCustomer,
-								deserializer.readString(),
-								deserializer.readString(),
-								deserializer.readString(),
-								deserializer.readBoolean(),
-								deserializer.readString(),
-						        readDataAndATGUsageInformation(deserializer)
-						);
+						createNewUser(usernameCustomer, deserializer);
 						return UserAccount.NO_RESULT;
 					}
 					case 10: {
 						// Abfrage nach Existenz
 						final String userToCheck = deserializer.readString();
-						return (_userAccounts.containsKey(userToCheck) && userHasObject(userToCheck, "")) ? 1 : 0;
+						return isUser(userToCheck) ? 1 : 0;
 					}					
 					default: {
 						// unbekannter Auftrag
@@ -481,6 +467,24 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+	@Override
+	public void createNewUser(final String usernameCustomer, final Deserializer deserializer) throws ConfigurationTaskException, RequestException, IOException {
+		createNewUser(
+				usernameCustomer,
+				deserializer.readString(),
+				deserializer.readString(),
+				deserializer.readString(),
+				deserializer.readBoolean(),
+				deserializer.readString(),
+		        readDataAndATGUsageInformation(deserializer)
+		);
+	}
+
+	@Override
+	public boolean isUser(final String userToCheck) {
+		return _userAccounts.containsKey(userToCheck) && userHasObject(userToCheck, "");
+	}
+
 	/**
 	 * Löscht für einen angegebenen Benutzer alle Einmalpasswörter bzw. markiert diese als ungültig. Nur ein Admin und der Benutzer selbst darf diese Aktion ausführen.
 	 * @param orderer Der Auftraggeber der Aktion
@@ -488,7 +492,8 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws FileNotFoundException
 	 * @throws ConfigurationTaskException
 	 */
-	private void clearSingleServingPasswords(final String orderer, final String username)
+	@Override
+	public void clearSingleServingPasswords(final String orderer, final String username)
 			throws FileNotFoundException, ConfigurationTaskException {
 		// prüfen, ob der Benutzer diese Aktion durchführen darf
 		if(isAdmin(orderer) || orderer.equals(username)) {
@@ -518,13 +523,40 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws FileNotFoundException
 	 * @throws ConfigurationTaskException
 	 */
-	private int countRemainingSingleServingPasswords(final String orderer, final String username)
+	@Override
+	public int countRemainingSingleServingPasswords(final String orderer, final String username)
 			throws FileNotFoundException, ConfigurationTaskException {
 		// prüfen, ob der Benutzer diese Aktion durchführen darf
 		if(isAdmin(orderer) || orderer.equals(username)) {
 
 			if(_userAccounts.containsKey(username)) {
 				return _userAccounts.get(username).countSingleServingPasswords();
+			}
+			else {
+				throw new ConfigurationTaskException("Unbekannter Benutzer");
+			}
+		}
+		else {
+			throw new ConfigurationTaskException("Benutzer verfügt nicht über die benötigten Rechte");
+		}
+	}
+	
+	/**
+	 * Gibt die verbleibenden gültigen Einmalpasswort-IDs für einen angegeben Benutzer zurück. Nur ein Admin und der Benutzer selbst darf diese Aktion ausführen.
+	 * @param orderer Der Auftraggeber der Aktion
+	 * @param username Der Benutzer, dessen Einmalpasswörter gezählt werden sollen
+	 * @return Die IDs der verbliebenen Einmalpasswörter
+	 * @throws FileNotFoundException
+	 * @throws ConfigurationTaskException
+	 */
+	@Override
+	public int[] getRemainingSingleServingPasswordIDs(final String orderer, final String username)
+			throws FileNotFoundException, ConfigurationTaskException {
+		// prüfen, ob der Benutzer diese Aktion durchführen darf
+		if(isAdmin(orderer) || orderer.equals(username)) {
+
+			if(_userAccounts.containsKey(username)) {
+				return _userAccounts.get(username).getUsableIDs();
 			}
 			else {
 				throw new ConfigurationTaskException("Unbekannter Benutzer");
@@ -542,7 +574,8 @@ public class ConfigAuthentication implements Authentication {
 	 * @return True falls der Benutzer ein Admin ist
 	 * @throws ConfigurationTaskException Der Auftrag kann nicht ausgeführt werden, weil der Benutzer nicht existiert
 	 */
-	private boolean isUserAdmin(final String orderer, final String userToCheck) throws ConfigurationTaskException {
+	@Override
+	public boolean isUserAdmin(final String orderer, final String userToCheck) throws ConfigurationTaskException {
 		if(_userAccounts.containsKey(userToCheck)) {
 			return _userAccounts.get(userToCheck).isAdmin();
 		}
@@ -554,7 +587,7 @@ public class ConfigAuthentication implements Authentication {
 	 * @param deserializer Quelle der Daten
 	 * @return Eine <code>Collection&lt;DataAndATGUsageInformation&gt;</code> mit den Daten aus dem Deserializer
 	 * @throws IOException
-	 * @see de.bsvrz.dav.daf.main.config.ConfigurationArea#createDynamicObject(de.bsvrz.dav.daf.main.config.DynamicObjectType, String, String, java.util.Collection)
+	 * @see ConfigurationArea#createDynamicObject(DynamicObjectType, String, String, Collection)
 	 */
 	private Collection<DataAndATGUsageInformation> readDataAndATGUsageInformation(final Deserializer deserializer) throws IOException {
 		final int numberOfPackets = deserializer.readInt();
@@ -578,7 +611,8 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws ConfigurationTaskException Die Konfiguration weigert sich den Auftrag auszuführen weil z.b. das Passwort falsch war, der Benutzer nicht die nötigen
 	 *                                    Rechte besitzt usw..
 	 */
-	private void createSingleServingPassword(String username, String usernameSingleServingPasswort, String passwortSingleServingPasswort)
+	@Override
+	public void createSingleServingPassword(String username, String usernameSingleServingPasswort, String passwortSingleServingPasswort)
 			throws RequestException, ConfigurationTaskException {
 		// prüfen, ob der Benutzer überhaupt ein Einmal-Passwort erzeugen darf
 		if(isAdmin(username)) {
@@ -621,13 +655,13 @@ public class ConfigAuthentication implements Authentication {
 	}
 
 	/**
-	 * Prüft ob der Benutzer Admin-Rechte besitzt.
-	 *
-	 * @param username Benutzername, der geprüft werden soll ob Admin-Rechte vorhanden sind
-	 *
-	 * @return true = Der Benutzer darf die Eigenschaften anderer Benutzer ändern und Einmal-Passwörter anlegen; false = Der Benutzer darf nur sein eigenes
-	 *         Passwort ändern
-	 */
+		 * Prüft ob der Benutzer Admin-Rechte besitzt.
+		 *
+		 * @param username Benutzername, der geprüft werden soll ob Admin-Rechte vorhanden sind
+		 *
+		 * @return true = Der Benutzer darf die Eigenschaften anderer Benutzer ändern und Einmal-Passwörter anlegen; false = Der Benutzer darf nur sein eigenes
+		 *         Passwort ändern
+		 */
 	private boolean isAdmin(String username) {
 		if(_userAccounts.containsKey(username)) {
 			return _userAccounts.get(username).isAdmin();
@@ -651,9 +685,10 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws ConfigurationTaskException Der neue Benutzer durfte nicht anglegt werden (Keine Rechte, Bentuzer bereits vorhanden)
 	 * @throws RequestException           technischer Fehler beim Zugriff auf die XML-Datei
 	 *
-	 * @see de.bsvrz.dav.daf.main.config.ConfigurationArea#createDynamicObject(de.bsvrz.dav.daf.main.config.DynamicObjectType, String, String, java.util.Collection)
+	 * @see ConfigurationArea#createDynamicObject(DynamicObjectType, String, String, Collection)
 	 */
-	private void createNewUser(String username, String newUserName, String newUserPid, String newUserPassword, boolean admin, String configurationArea, Collection<DataAndATGUsageInformation> data)
+	@Override
+	public void createNewUser(String username, String newUserName, String newUserPid, String newUserPassword, boolean admin, String configurationArea, Collection<DataAndATGUsageInformation> data)
 			throws ConfigurationTaskException, RequestException {
 		if(isAdmin(username)) {
 
@@ -715,7 +750,7 @@ public class ConfigAuthentication implements Authentication {
 	 * @param pid                  Pid des Objekts
 	 * @param data                 Konfigurierende Datensätze, die angelegt werden sollen, oder <code>null</code> falls keine angelgt werden sollen
 	 *
-	 * @throws de.bsvrz.dav.daf.main.config.ConfigurationChangeException Fehler beim Erzeugen des neuen Benutzers
+	 * @throws ConfigurationChangeException Fehler beim Erzeugen des neuen Benutzers
 	 */
 	private void createUserObject(String pidConfigurationArea, String username, String pid, Collection<DataAndATGUsageInformation> data) throws ConfigurationChangeException {
 		final ConfigurationArea configurationArea = _dataModel.getConfigurationArea(pidConfigurationArea);
@@ -858,7 +893,8 @@ public class ConfigAuthentication implements Authentication {
 	 *                                    nicht ändern (kein Admin oder der Besitzer des Passwords).
 	 * @throws RequestException           Fehler beim Zugriff auf die XML-Datei
 	 */
-	private void changeUserPassword(String username, String userNameForPasswordChange, String newPassword) throws ConfigurationTaskException, RequestException {
+	@Override
+	public void changeUserPassword(String username, String userNameForPasswordChange, String newPassword) throws ConfigurationTaskException, RequestException {
 
 		// Die Pid des Benutzers ist unbekannt, darum ""
 		final boolean hasUserObject = userHasObject(userNameForPasswordChange, "");
@@ -874,7 +910,7 @@ public class ConfigAuthentication implements Authentication {
 
 				if(((isAdmin(username)) || (username.equals(userNameForPasswordChange)))) {
 					try {
-						_userAccounts.get(userNameForPasswordChange).setPassword(newPassword);
+						_userAccounts.get(userNameForPasswordChange).setXmlVerifierText(newPassword);
 					}
 					catch(Exception e) {
 						_debug.error("Passwort ändern", e);
@@ -926,7 +962,8 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws ConfigurationTaskException Der Benutzer ist unbekannt oder der Auftraggeber besitzt nicht die nötigen Rechte
 	 * @throws RequestException           Fehler beim Zugriff auf die XML-Datei
 	 */
-	private void changeUserRights(String username, String usernameChangeRights, boolean newUserRights) throws ConfigurationTaskException, RequestException {
+	@Override
+	public void changeUserRights(String username, String usernameChangeRights, boolean newUserRights) throws ConfigurationTaskException, RequestException {
 		if(isAdmin(username)) {
 			// Admin versucht die Rechte zu ändern
 			if(_userAccounts.containsKey(usernameChangeRights)) {
@@ -980,7 +1017,8 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws RequestException Das Löschen kann aufgrund eines Problems nicht durchgeführt werden
 	 * @throws ConfigurationTaskException Die Anfrage ist fehlerhaft weil der Veranlasser nicht die nötigen Rechte hat oder der zu löschende Benutzer nicht existiert
 	 */
-	private void deleteUser(String username, String userToDelete) throws  RequestException , ConfigurationTaskException{
+	@Override
+	public void deleteUser(String username, String userToDelete) throws  RequestException , ConfigurationTaskException{
 		if(isAdmin(username)) {
 			final boolean userHasObject = userHasObject(userToDelete, "");
 
@@ -1015,6 +1053,103 @@ public class ConfigAuthentication implements Authentication {
 		else {
 			throw new ConfigurationTaskException("Der Benutzer hat nicht die nötigen Rechte");
 		}
+	}
+
+
+	public SrpVerifierAndUser getSrpVerifierData(final String authenticatedUser, String userName, final int passwordIndex) throws ConfigurationTaskException {
+
+		if(!isAdmin(authenticatedUser) && !authenticatedUser.equals(userName)) {
+			throw new ConfigurationTaskException("Der Benutzer hat nicht die nötigen Rechte");
+		}
+		
+		UserLogin userLogin = UserLogin.notAuthenticated();
+		if(_userAccounts.containsKey(userName)) {
+			for(SystemObject systemObject : _dataModel.getType("typ.benutzer").getObjects()) {
+				if(systemObject.getName().equals(userName)) {
+					userLogin = UserLogin.user(systemObject.getId());
+				}
+			}
+		}
+
+		return getVerifier(userName, userLogin, passwordIndex);
+	}
+
+	@Override
+	public int setOneTimePasswords(final String authenticatedUser, final String usernamePassword, final List<String> passwords, final boolean append) throws ConfigurationTaskException, RequestException {
+		// prüfen, ob der Benutzer überhaupt ein Einmal-Passwort erzeugen darf
+		if(isAdmin(authenticatedUser)) {
+			// Einmal-Passwort erzeugen
+			if(_userAccounts.containsKey(usernamePassword)) {
+				return _userAccounts.get(usernamePassword).createNewSingleServingPasswords(passwords, append);
+			}
+			else {
+				// Der Benutzer, für den das Passwort angelegt werden soll, existiert nicht
+				throw new ConfigurationTaskException("Unbekannter Benutzer");
+			}
+		}
+		else {
+			throw new ConfigurationTaskException("Benutzer verfügt nicht über die benötigten Rechte");
+		}
+	}
+
+	@Override
+	public void disableSingleServingPassword(final String authenticatedUser, final String usernamePassword, final int passwordIndex) throws ConfigurationTaskException, RequestException {
+		if(isAdmin(authenticatedUser) || authenticatedUser.equals(usernamePassword)) {
+			// Der Benutzer darf ein Einmal-Passwort deaktivieren
+
+			// Einmal-Passwort erzeugen
+			if(_userAccounts.containsKey(usernamePassword)) {
+				_userAccounts.get(usernamePassword).disableSingleServingPassword(passwordIndex);
+			}
+			else {
+				// Der Benutzer, für den das Passwort angelegt werden soll, existiert nicht
+				throw new ConfigurationTaskException("Unbekannter Benutzer");
+			}
+		}
+		else {
+			throw new ConfigurationTaskException("Benutzer verfügt nicht über die benötigten Rechte");
+		}
+	}
+
+	private SrpVerifierAndUser getVerifier(final String userName, final UserLogin userLogin, final int passwordIndex) {
+		UserAccount userAccount = _userAccounts.get(userName);
+		if(userAccount == null) {
+			return new SrpVerifierAndUser(userLogin, fakeVerifier(userName, secretHash(userName, passwordIndex), ClientCredentials.ofString(_secretToken)), false);
+		}
+		try {
+			return new SrpVerifierAndUser(userLogin, userAccount.getSrpVerifier(passwordIndex), false);
+		}
+		catch(IllegalArgumentException ignored){
+			// Kein SRP-Format, Passwort liegt im Klartext vor.
+			// Passenden SRP-Verifier erzeugen, damit der Benutzer sich authentifizieren kann.
+			// Dem Datenverteiler ist es egal, ob dieser Verifier in der benutzerverwaltung.xml gespeichert war, oder hier erzeugt wurde.
+			// Tatsächlich kann er es gar nicht unterscheiden.
+			
+			// ClientCredentials.ofString bewirkt, dass in der benutzerverwaltung.xml auch der Login-Token x drin stehen kann.
+			// das ist zwar nirgendwo so spezifiziert, aber eigentlich spricht da nicht wirklich was gegen
+			// und es ist in jedem Fall besser als Klartext
+			ClientCredentials clientCredentials = userAccount.getClientCredentials(passwordIndex);
+			if(clientCredentials != null) {
+				return new SrpVerifierAndUser(userLogin, fakeVerifier(userName, secretHash(userName, passwordIndex), clientCredentials), true);
+			}
+			else {
+				// Passwort ist leer ("")
+				// Fake-Verifier erzeugen
+				return new SrpVerifierAndUser(userLogin, fakeVerifier(userName, secretHash(userName, passwordIndex), ClientCredentials.ofString(_secretToken)), false);
+			}
+		}
+	}
+
+	private static SrpVerifierData fakeVerifier(final String userName, final byte[] salt, final ClientCredentials clientCredentials) {
+		return SrpClientAuthentication.createVerifier(SrpCryptoParameter.getDefaultInstance(), userName, clientCredentials, salt);
+	}
+
+	private byte[] secretHash(final String userName, final int passwordIndex) {
+		return SrpUtilities.generatePredictableSalt(getCryptoParameters(), (userName + _secretToken + passwordIndex).getBytes(StandardCharsets.UTF_8));
+	}
+
+	private SrpCryptoParameter getCryptoParameters() {
+		return SrpCryptoParameter.getDefaultInstance();
 	}
 
 	/**
@@ -1217,21 +1352,21 @@ public class ConfigAuthentication implements Authentication {
 		/** Benutzername des Accounts */
 		private final String _username;
 
-		/** Passwort des Accounts in Klarschrift */
-		private String _password;
+		/** Passwort oder SRP-Überprüftungscode, so wie er in der Datei steht */
+		private String _xmlVerifierText;
 
 		/** true = Der Benutzer ist ein Admin und darf Einstellungen bei anderen Benutzern vornehmen */
 		private boolean _admin;
 
 		/**
-		 * Liste, die alle benutzbaren Einmalpasswörter enthält. An Index 0 steht immer das als nächstes zu benutzende Passwort. Am Ende der Liste wird jedes neue
-		 * Passwort eingefügt. Wird ein Passwort benutzt, wird das Passwort vom Anfang der Liste entfernt (FIFO).
+		 * Liste, die alle benutzbaren Einmalpasswörter enthält.
 		 */
-		private final LinkedList<SingleServingPassword> _usableSingleServingPasswords = new LinkedList<SingleServingPassword>();
+		private final Collection<SingleServingPassword> _usableSingleServingPasswords = new HashSet<>();
 
 		/**
-		 * Speichert alle Passwörter der Einmal-Passwörter (Als Schlüssel dient das Passwort in Klarschrift). Soll ein neues Einmal-Passwort erzeugt werden, und das
+		 * Speichert alle Einmal-Passwörter . Soll ein neues Einmal-Passwort erzeugt werden, und das
 		 * Passwort befindet sich bereits in dieser Menge, dann darf das neue Einmal-Passwort nicht angelegt werden.
+		 * Dadurch wird verhindert, dass ein Passwort oder Überprüfungscode doppelt verwendet wird.
 		 */
 		private final Set<String> _allSingleServingPasswords = new HashSet<String>();
 
@@ -1259,13 +1394,13 @@ public class ConfigAuthentication implements Authentication {
 		 */
 		public UserAccount(String username, String xmlPassword, boolean admin, List<SingleServingPassword> allSingleServingPasswords, Element xmlObject) {
 			_username = username;
-			_password = xmlPassword;
+			_xmlVerifierText = xmlPassword;
 			_xmlObject = xmlObject;
 			_admin = admin;
 
 			for(SingleServingPassword singleServingPassword : allSingleServingPasswords) {
 				// Damit dieses Passwort nicht noch einmal vergeben werden kann
-				_allSingleServingPasswords.add(singleServingPassword.getPassword());
+				_allSingleServingPasswords.add(singleServingPassword.getXmlVerifierText());
 
 				if(singleServingPassword.getIndex() > _greatestSingleServingPasswordIndex) {
 					_greatestSingleServingPasswordIndex = singleServingPassword.getIndex();
@@ -1291,22 +1426,62 @@ public class ConfigAuthentication implements Authentication {
 		 * Unverschlüsseltes Passwort des Benutzers
 		 *
 		 * @return s.o.
+		 * 
+		 * @deprecated In der Übergangsphase kann in der XML-Datei noch ein Klartextpasswort drin stehen
 		 */
-		public String getPassword() {
-			return _password;
+		@Deprecated
+		public ClientCredentials getClientCredentials() {
+			return getClientCredentials(-1);
+		}
+
+		/**
+		 * Unverschlüsseltes Passwort des Benutzers
+		 *
+		 * @return s.o.
+		 * @param passwordIndex
+		 * @deprecated In der Übergangsphase kann in der XML-Datei noch ein Klartextpasswort drin stehen
+		 */
+		@Deprecated
+		public ClientCredentials getClientCredentials(final int passwordIndex) {
+			try{
+				getSrpVerifier(passwordIndex);
+			}
+			catch(IllegalArgumentException ignored) {
+				return ClientCredentials.ofPassword(getXmlVerifierText(passwordIndex).toCharArray());
+			}
+			throw new IllegalArgumentException("Das Passwort am Benutzer " + _username + " ist verschlüsselt gespeichert, eine Authentifizierung über das veraltete HMAC-Verfahren ist damit nicht mehr möglich. Datenverteiler und Applikationsfunktionen müssen ggf. aktualisiert werden.");
+		}
+
+		/**
+		 * Gibt den SRP-Überprüfungscode des Standardpassworts zurück
+		 * @return den SRP-Verifier
+		 * @throws IllegalArgumentException Bei einem String, der nicht dem erwarteten Format entspricht (also wenn es sich bspw. um ein Klartextpasswort handelt(
+		 */
+		public SrpVerifierData getSrpVerifier() {
+			return getSrpVerifier(-1);
+		}
+
+		/** 
+		 * Gibt den SRP-Überprüfungscode zurück
+		 * @param passwordIndex    Passwort-Index (-1 für Standardpasswort)
+		 * @return den SRP-Verifier
+		 * @throws IllegalArgumentException Bei einem String, der nicht dem erwarteten Format entspricht (also wenn es sich bspw. um ein Klartextpasswort handelt(
+		 */
+		public SrpVerifierData getSrpVerifier(final int passwordIndex) {
+			return new SrpVerifierData(getXmlVerifierText(passwordIndex));
 		}
 
 		/**
 		 * Ändert das Passwort und speichert das neue Passwort in einer XML-Datei
 		 *
-		 * @param password Neues Passwort
+		 * @param xmlVerifierText Neues Passwort
 		 */
-		public void setPassword(String password) throws FileNotFoundException, TransformerException {
-			_xmlObject.setAttribute("passwort", password);
+		public void setXmlVerifierText(String xmlVerifierText) throws FileNotFoundException, TransformerException {
+			_xmlObject.setAttribute("passwort", xmlVerifierText);
 			saveXMLFile();
 
 			// Erst nach dem das neue Passwort gespeichert wurde, wird die Änderung im Speicher übernommen
-			_password = password;
+			_xmlVerifierText = xmlVerifierText;
 		}
 
 		/** @return true = Der Benutzer darf die Eigenschaften anderer Benutzer ändern; false = Der Benutzer darf nur sein Passwort ändern */
@@ -1340,12 +1515,12 @@ public class ConfigAuthentication implements Authentication {
 		 * @throws RequestException           Fehler beim Speichern des neuen Passworts, das Passwort wurde nicht angelegt.
 		 * @throws ConfigurationTaskException Das Passwort wurde bereits vergeben, es wurde kein neues Passwort angelegt.
 		 */
-		synchronized public void createNewSingleServingPassword(final String newPassword) throws ConfigurationTaskException, RequestException {
+		public synchronized void createNewSingleServingPassword(final String newPassword) throws ConfigurationTaskException, RequestException {
 			if(!_allSingleServingPasswords.contains(newPassword)) {
 				// Das Passwort wurde noch nicht vergeben.
 
 				// An das XML-Objekt ein neues Element hängen
-				final Element xmlSingleServingPassword = createXMLSingleServingPasswort(newPassword, ((_greatestSingleServingPasswordIndex + 1)), "ja");
+				final Element xmlSingleServingPassword = createXMLSingleServingPasswort(newPassword, _greatestSingleServingPasswordIndex + 1, "ja");
 				_xmlObject.appendChild(xmlSingleServingPassword);
 
 				// XML Datei neu speichern
@@ -1357,7 +1532,7 @@ public class ConfigAuthentication implements Authentication {
 					// Jetzt wird es gesperrt, damit es nicht noch einmal vergeben
 					// werden kann.
 					_allSingleServingPasswords.add(newPassword);
-					_usableSingleServingPasswords.addLast(
+					_usableSingleServingPasswords.add(
 							new SingleServingPassword(
 									newPassword, _greatestSingleServingPasswordIndex + 1, true, xmlSingleServingPassword
 							)
@@ -1366,7 +1541,7 @@ public class ConfigAuthentication implements Authentication {
 				}
 				catch(Exception e) {
 					// Das Passwort wurde nicht angelegt
-					_debug.error("Fehler beim anlegen eines Einmal-Passworts", e);
+					_debug.error("Fehler beim Anlegen eines Einmal-Passworts", e);
 					throw new RequestException(e);
 				}
 			}
@@ -1376,25 +1551,72 @@ public class ConfigAuthentication implements Authentication {
 			}
 		}
 
+		public synchronized int createNewSingleServingPasswords(final List<String> passwords, final boolean append) throws ConfigurationTaskException, RequestException {
+			if(!append){
+				try {
+					clearSingleServingPasswords();
+				}
+				catch(TransformerException | FileNotFoundException e) {
+					throw new ConfigurationChangeException("Konnte Einmalpasswörter nicht löschen", e);
+				}
+			}
+			else {
+				for(String password : passwords) {
+					if(_allSingleServingPasswords.contains(password)) {
+						// Das Passwort wurde bereits vergeben
+						throw new ConfigurationTaskException("Ein Passwort wurde bereits vergeben");
+					}
+				}
+			}
+			int firstInsertIndex = _greatestSingleServingPasswordIndex + 1;
+			final List<Element> xmlElements = new ArrayList<>(passwords.size());
+			for(String password : passwords) {
+				final Element xmlSingleServingPassword = createXMLSingleServingPasswort(password, _greatestSingleServingPasswordIndex + 1, "ja");
+				_xmlObject.appendChild(xmlSingleServingPassword);
+				xmlElements.add(xmlSingleServingPassword);
+				_greatestSingleServingPasswordIndex++;
+			}
+			// XML Datei neu speichern
+			try {
+				saveXMLFile();
+
+				// Das Speichern hat geklappt, nun alle Objekte im Speicher ändern
+				_allSingleServingPasswords.addAll(passwords);
+				for(int i = 0; i < passwords.size(); i++) {
+					final String password = passwords.get(i);
+					_usableSingleServingPasswords.add(
+							new SingleServingPassword(password, firstInsertIndex + i, true, xmlElements.get(i))
+					);
+				}
+			}
+			catch(Exception e) {
+				// Die Passwörter wurden nicht angelegt
+				_debug.error("Fehler beim Anlegen eines Einmal-Passworts", e);
+				throw new RequestException(e);
+			}
+			return firstInsertIndex;
+		}
+
 		/**
 		 * Versucht ein Einmal-Passwort zu benutzen. Ist dies möglich, wird das Einmal-Passwort als gebraucht markiert. Wurde eine falsches Passwort übergeben,
 		 * so wird eine Exception geworfen.
 		 *
 		 * @param encryptedPassword           Einmal-Passwort, das vom Benutzer eingegeben wurde
 		 * @param authentificationText        Text mit dem das Einmal-Passwort verschlüsselt wurde
-		 * @param authentificationProcessName Name des benutzten Verschlüsslungsverfahrens
+		 * @param authentificationProcessName Name des benutzten Verschlüsselungsverfahren
 		 *
 		 * @throws IllegalArgumentException     Falsches Einmal-Passwort
-		 * @throws NoSuchAlgorithmException     Unbekantes Verschlüsslungsverfahren
+		 * @throws NoSuchAlgorithmException     Unbekanntes Verschlüsselungsverfahren
 		 * @throws UnsupportedEncodingException
 		 * @throws InvalidKeyException
 		 * @throws FileNotFoundException
 		 * @throws TransformerException
 		 */
-		synchronized public void useSingleServingPassword(byte[] encryptedPassword, String authentificationText, String authentificationProcessName)
+		public synchronized void useSingleServingPassword(byte[] encryptedPassword, String authentificationText, String authentificationProcessName)
 				throws NoSuchAlgorithmException, UnsupportedEncodingException, InvalidKeyException, FileNotFoundException, TransformerException {
+
 			for(SingleServingPassword singleServingPassword : _usableSingleServingPasswords) {
-				final SecretKey secretKey = new SecretKeySpec(singleServingPassword.getPassword().getBytes("ISO-8859-1"), authentificationProcessName);
+				final SecretKey secretKey = new SecretKeySpec(singleServingPassword.getXmlVerifierText().getBytes("ISO-8859-1"), authentificationProcessName);
 				Mac mac = Mac.getInstance("HmacMD5");
 				mac.init(secretKey);
 
@@ -1415,19 +1637,80 @@ public class ConfigAuthentication implements Authentication {
 		 * @throws TransformerException
 		 * @throws FileNotFoundException
 		 */
-		public void clearSingleServingPasswords() throws TransformerException, FileNotFoundException {
-			for(SingleServingPassword singleServingPassword : _usableSingleServingPasswords) {
-				singleServingPassword.setPasswortInvalid();
+		public synchronized void clearSingleServingPasswords() throws TransformerException, FileNotFoundException {
+			// Alle Kindknoten (Einmalpasswörter löschen)
+			while(_xmlObject.hasChildNodes()){
+				_xmlObject.removeChild(_xmlObject.getFirstChild());
 			}
+			saveXMLFile();
+			_allSingleServingPasswords.clear();
 			_usableSingleServingPasswords.clear();
+			_greatestSingleServingPasswordIndex = -1;
 		}
 
 		/**
 		 * Gibt die Anzahl der verbleidenden, gültigen Einmalpasswörter zurück
 		 * @return die Anzahl der verbleidenden, gültigen Einmalpasswörter
 		 */
-		public int countSingleServingPasswords() {
+		public synchronized int countSingleServingPasswords() {
 			return _usableSingleServingPasswords.size();
+		}
+
+		/**
+		 * Gibt das Passwort oder den Verifier als Rohdatum mit dem angegebenen Index zurück
+		 * @param passwordIndex Index (falls -1 wird das normale Passwort zurückgegeben, sonst ein Einmalpasswort mit angegebenem Index)
+		 * @return Passwort oder leeren String falls kein Passwort vorhanden ist. Der Aufrufer muss sicherstellen, dass man sich nicht mit einem leeren Passwort einloggen kann.
+		 */
+		private String getXmlVerifierText(final int passwordIndex) {
+			if(passwordIndex == -1) {
+				return _xmlVerifierText;
+			}
+			else {
+				for(SingleServingPassword oneTimePassword : _usableSingleServingPasswords) {
+					if(oneTimePassword.getIndex() == passwordIndex){
+						return oneTimePassword.getXmlVerifierText();
+					}
+				}
+			}
+			_debug.warning("Angegebener Passwort-Index ist nicht am Benutzer " + _username + " vorhanden: " + passwordIndex);
+			return "";
+		}
+
+		/**
+		 * Deaktiviert ein Einmalpasswort
+		 * @param passwordIndex Index
+		 * @throws RequestException
+		 */
+		public synchronized void disableSingleServingPassword(final int passwordIndex) throws RequestException {
+			try {
+				if(passwordIndex == -1) {
+					throw new IllegalArgumentException("Das Standard-Passwort kann nicht deaktiviert werden");
+				}
+				else {
+					for(Iterator<SingleServingPassword> iterator = _usableSingleServingPasswords.iterator(); iterator.hasNext(); ) {
+						final SingleServingPassword usableSingleServingPassword = iterator.next();
+						if(usableSingleServingPassword.getIndex() == passwordIndex) {
+							usableSingleServingPassword.setPasswortInvalid();
+							iterator.remove();
+							return;
+						}
+					}
+				}
+				// Das Passwort wurde schon deaktiviert.
+				_debug.warning("Kann Einmalpasswort nicht deaktivieren, Passwort-Index ist nicht am Benutzer " + _username + " vorhanden: " + passwordIndex);
+			}
+			catch(Exception e){
+				_debug.error("Fehler beim Deaktivieren eines Einmal-Passworts", e);
+				throw new RequestException(e);	
+			}
+		}
+
+		/**
+		 * Gibt die IDs der benutzbaren Einmalpasswörter zurück
+		 * @return IDs
+		 */
+		public int[] getUsableIDs() {
+			return _usableSingleServingPasswords.stream().mapToInt(SingleServingPassword::getIndex).sorted().toArray();
 		}
 	}
 
@@ -1435,7 +1718,7 @@ public class ConfigAuthentication implements Authentication {
 	private final class SingleServingPassword {
 
 		/** Passwort in Klarschrift */
-		private final String _password;
+		private final String _xmlVerifierText;
 
 		/** Index des Passworts */
 		private final int _index;
@@ -1447,26 +1730,26 @@ public class ConfigAuthentication implements Authentication {
 		private final Element _xmlObject;
 
 		/**
-		 * @param password       Password des Einmal-Passworts, ausgelesen aus der XML-Datei
+		 * @param xmlVerifierText       Password des Einmal-Passworts, ausgelesen aus der XML-Datei
 		 * @param index          Index des Passworts
 		 * @param passwordUsable Kann das Passwort noch benutzt werden. true = es kann noch benutzt werden; false = es wurde bereits benutzt und kann nicht noch
 		 *                       einmal benutzt werden
 		 * @param xmlObject      XML-Objekt, das dem Einmal-Passwort entspricht
 		 */
-		public SingleServingPassword(String password, int index, boolean passwordUsable, Element xmlObject) {
-			_password = password;
+		public SingleServingPassword(String xmlVerifierText, int index, boolean passwordUsable, Element xmlObject) {
+			_xmlVerifierText = xmlVerifierText;
 			_index = index;
 			_passwordUsable = passwordUsable;
 			_xmlObject = xmlObject;
 		}
 
 		/**
-		 * Passwort des Einmal-Passworts
+		 * Passwort-String-Wert in der XML-Datei (entweder ein Klartextpasswort oder ein SRP-Verifier)
 		 *
 		 * @return s.o
 		 */
-		public String getPassword() {
-			return _password;
+		private String getXmlVerifierText() {
+			return _xmlVerifierText;
 		}
 
 		/**
@@ -1483,15 +1766,25 @@ public class ConfigAuthentication implements Authentication {
 		 *
 		 * @return true = ja; false = nein, es wurde bereits benutzt und darf nicht noch einmal benutzt werden
 		 */
-		synchronized public boolean isPasswordUsable() {
+		public synchronized boolean isPasswordUsable() {
 			return _passwordUsable;
 		}
 
 		/** Setzt ein Einmal-Passwort auf ungültig und speichert diese Information in der XML-Datei (erst speichern, dann Objekte im Speicher ändern) */
-		synchronized public void setPasswortInvalid() throws FileNotFoundException, TransformerException {
+		public synchronized void setPasswortInvalid() throws FileNotFoundException, TransformerException {
 			_xmlObject.setAttribute("gueltig", "nein");
 			saveXMLFile();
 			_passwordUsable = false;
+		}
+
+		@Override
+		public String toString() {
+			return "SingleServingPassword{" +
+					"_password='" + _xmlVerifierText + '\'' +
+					", _index=" + _index +
+					", _passwordUsable=" + _passwordUsable +
+					", _xmlObject=" + _xmlObject +
+					'}';
 		}
 	}
 
@@ -1512,8 +1805,8 @@ public class ConfigAuthentication implements Authentication {
 		 *
 		 * @return Für Referenzen im Suchverzeichnis wird ein InputSource-Objekt, das mit der entsprechenden Datei im Suchverzeichnis verbunden ist, zurückgegeben.
 		 *
-		 * @throws org.xml.sax.SAXException Bei Fehlern beim Zugriff auf externe Entities.
-		 * @throws java.io.IOException
+		 * @throws SAXException Bei Fehlern beim Zugriff auf externe Entities.
+		 * @throws IOException
 		 */
 		public InputSource resolveEntity(String publicId, String systemId) throws SAXException, IOException {
 			if(publicId != null && publicId.equals("-//K2S//DTD Authentifizierung//DE")) {
