@@ -28,6 +28,7 @@ package de.bsvrz.puk.config.main.authentication;
 import de.bsvrz.dav.daf.communication.srpAuthentication.SrpVerifierAndUser;
 import de.bsvrz.dav.daf.main.DataAndATGUsageInformation;
 import de.bsvrz.dav.daf.main.config.ConfigurationTaskException;
+import de.bsvrz.dav.daf.main.config.SystemObject;
 import de.bsvrz.dav.daf.main.impl.config.request.RequestException;
 import de.bsvrz.sys.funclib.dataSerializer.Deserializer;
 
@@ -61,7 +62,7 @@ public interface Authentication {
 	 * Die Implementierung dieser Methode stellt die Authentifizierung des Benutzers sicher. Dafür wird das original
 	 * Passwort mit dem übergebenen <code>authentificationText</code> verschlüsselt und mit dem übergebenen verschlüsselten
 	 * Passwort verglichen. Sind beide Passwörter gleich, und der übergebene Benutzername stimmt mit dem Benutzernamen des
-	 * original Passworts überein, so war die Authentifkation erfolgreich.
+	 * original Passworts überein, so war die Authentifikation erfolgreich.
 	 * <p>
 	 * Konnte das original Passwort nicht benutzt werden, muss geprüft werden, ob es ein Einmal-Passwort gibt. Das
 	 * Einmal-Passwort muss das derzeit aktuell gültige sein und muss mit dem übergebenen verschlüsseltem Passwort
@@ -78,7 +79,7 @@ public interface Authentication {
 	 * @deprecated Diese Methode wird von der alten HMAC-Authentifizierung ohne Verschlüsselung benutzt
 	 */
 	@Deprecated
-	public void isValidUser(String username, byte[] encryptedPassword, String authentificationText, String authentificationProcessName) throws Exception, IllegalArgumentException;
+	void isValidUser(String username, byte[] encryptedPassword, String authentificationText, String authentificationProcessName) throws Exception, IllegalArgumentException;
 
 	/**
 	 * Bearbeitet eine der folgenden Aufgaben:<br> - Neuer Benutzer anlegen<br> - Einmal-Passwort erzeugen<br> - Rechte eines Benutzers ändern<br> - Passwort
@@ -101,7 +102,7 @@ public interface Authentication {
 	 * nur, wenn das Passwort im Klartext gespeichert ist.
 	 */
 	@Deprecated
-	public int processTask(String usernameCustomer, byte[] encryptedMessage, String encryptionProcessName) throws ConfigurationTaskException, RequestException;
+	int processTask(String usernameCustomer, byte[] encryptedMessage, String encryptionProcessName) throws ConfigurationTaskException, RequestException;
 
 	/**
 	 * Erzeugt einen Zufallstext und gibt diesen als Byte-Array zurück.
@@ -110,12 +111,12 @@ public interface Authentication {
 	 * @deprecated Diese Methode wird von der alten HMAC-basierten Benutzerverwaltung benutzt und ist bei SRP nicht mehr sinnvoll.
 	 */
 	@Deprecated
-	public byte[] getText();
+	byte[] getText();
 
 	/**
 	 * Diese Methode wird aufgerufen, wenn das System heruntergefahren wird. Es ist ein Zustand herzustellen, der es ermöglicht das System wieder zu starten.
 	 */
-	public void close();
+	void close();
 
 	/**
 	 * Erstellt einen neuen Benutzer
@@ -176,7 +177,7 @@ public interface Authentication {
 	boolean isUserAdmin(String orderer, String userToCheck) throws ConfigurationTaskException;
 
 	/**
-	 * @param username                      Benutzer, der den Auftrag angestossen hat
+	 * @param username                      Benutzer, der den Auftrag angestoßen hat
 	 * @param usernameSingleServingPasswort Benutzer für den das Einmal-Passwort gedacht ist
 	 * @param passwortSingleServingPasswort Einmal-Passwort
 	 *
@@ -198,7 +199,7 @@ public interface Authentication {
 	 * @param configurationArea Pid des Konfigurationsbereichs, in dem der neue Benutzer angelegt werden soll
 	 * @param data              Konfigurierende Datensätze, die angelegt werden sollen (falls leere Liste oder <code>null</code> werden keine Daten angelegt)
 	 *
-	 * @throws ConfigurationTaskException Der neue Benutzer durfte nicht anglegt werden (Keine Rechte, Bentuzer bereits vorhanden)
+	 * @throws ConfigurationTaskException Der neue Benutzer durfte nicht angelegt werden (Keine Rechte, Benutzer bereits vorhanden)
 	 * @throws RequestException           technischer Fehler beim Zugriff auf die XML-Datei
 	 *
 	 * @see de.bsvrz.dav.daf.main.config.ConfigurationArea#createDynamicObject(de.bsvrz.dav.daf.main.config.DynamicObjectType, String, String, java.util.Collection)
@@ -249,7 +250,7 @@ public interface Authentication {
 	/**
 	 * Gibt die dem angegebenen Benutzer den gespeicherten SRP-Überprüfungscode (Verifier, v) zurück, mit dem jemand überprüfen kann, ob der Benutzer sein Passwort weiß, ohne das der
 	 * überprüfende selbst das Passwort wissen muss.
-	 * @param authenticatedUser Benutzer, der die Anfrage durchführt. Die Anfrage dürfen nur Administratioren durchführen, andere Benutzer dürfen nur für sich selbst den
+	 * @param authenticatedUser Benutzer, der die Anfrage durchführt. Die Anfrage dürfen nur Administratoren durchführen, andere Benutzer dürfen nur für sich selbst den
 	 *                          Verifier abfragen.   
 	 * @param username          Benutzername, dessen SRP-Verifier abgefragt wird    
 	 * @param passwordIndex
@@ -258,8 +259,8 @@ public interface Authentication {
 	SrpVerifierAndUser getSrpVerifierData(String authenticatedUser, String username, final int passwordIndex) throws ConfigurationTaskException;
 
 	/**
-	 * @param authenticatedUser Benutzer, der den Auftrag angestossen hat
-	 * @param usernamePassword  Benutzer für den die Einmal-Passwörter gedacht sund
+	 * @param authenticatedUser Benutzer, der den Auftrag angestoßen hat
+	 * @param usernamePassword  Benutzer für den die Einmal-Passwörter gedacht sind
 	 * @param passwords         Einmal-Passwörter
 	 * @param append            Passwörter anhängen (falls nicht, bestehende Passwörter vorher löschen)
 	 * @return Index des ersten angehängten Passworts
@@ -276,4 +277,13 @@ public interface Authentication {
 	 * @param passwordIndex Index des Einmalpassworts
 	 */
 	void disableSingleServingPassword(String authenticatedUser, String usernamePassword, int passwordIndex) throws ConfigurationTaskException, RequestException;
+
+	/**
+	 * Gibt zu einem Benutzernamen das Benutzerobjekt zurück, falls es existiert. Gibt es kein Objekt mit dem Benutzernamen wird `null` zurückgegeben.
+	 * Gibt es mehrere Benutzerobjekte, dann wird eins davon ausgewählt, wobei Objekte der lokalen AOE bevorzugt werden und, sollte es dann immer noch mehrdeutigkeiten geben, Objekte
+	 * die nach Pid am Anfang sortiert werden würden. 
+	 * @param userName Benutzername
+	 * @return SystemObject (typ.benutzer) oder `null`
+	 */
+	SystemObject getUserObject(String userName);
 }

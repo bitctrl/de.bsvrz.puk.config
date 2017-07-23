@@ -28,7 +28,13 @@ package de.bsvrz.puk.config.configFile.datamodel;
 
 import de.bsvrz.dav.daf.main.config.ConfigurationChangeException;
 import de.bsvrz.dav.daf.main.config.SystemObject;
+import de.bsvrz.sys.funclib.dataSerializer.Deserializer;
+import de.bsvrz.sys.funclib.dataSerializer.NoSuchVersionException;
+import de.bsvrz.sys.funclib.dataSerializer.SerializingFactory;
+import de.bsvrz.sys.funclib.debug.Debug;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,6 +49,8 @@ import java.util.List;
  */
 public abstract class MutableSetStorage {
 
+	private static final Debug _debug = Debug.getLogger();
+	
 	private SoftReference<List<MutableElement>> _elements = null;
 
 	/**
@@ -56,6 +64,30 @@ public abstract class MutableSetStorage {
 			if(lastElement.getObject() != null) return;
 			mutableElements.remove(mutableElements.size() - 1);
 		}
+	}
+
+	static List<MutableElement> deserializeMutableElements(final ConfigMutableSet mutableSet, final byte[] bytes) throws NoSuchVersionException, IOException {
+		final List<MutableElement> mutableElements = new ArrayList<MutableElement>();
+		final ByteArrayInputStream in = new ByteArrayInputStream(bytes);
+		final Deserializer deserializer = SerializingFactory.createDeserializer(mutableSet.getSerializerVersion(), in);
+		assert bytes.length % MutableElement.BYTE_SIZE == 0 : "Format des Byte-Arrays für die Elemente einer Menge " + mutableSet.getNameOrPidOrId()
+				+ " hat sich geändert. Länge muss durch " + MutableElement.BYTE_SIZE + " teilbar sein.";
+		int numberOfElements = bytes.length / MutableElement.BYTE_SIZE;
+		for(int i = 0; i < numberOfElements; i++) {
+			long id = deserializer.readLong();
+			long startTime = deserializer.readLong(); // Zeit, ab der das Element zur Menge gehört
+			long endTime = deserializer.readLong(); // Zeit, ab der das Element nicht mehr zur Menge gehört
+			short simulationVariant = deserializer.readShort(); // Simulationsvariante dieses Objekt, in der es zur Menge hinzugefügt oder aus der Menge entfernt wurde
+			final SystemObject object = mutableSet.getDataModel().getObject(id);
+
+			if(object == null) {
+				_debug.warning("Element mit Id '" + id + "' kann nicht der Menge '" + mutableSet.getPidOrNameOrId()
+				        + "' hinzugefügt werden, da es kein System-Objekt hierzu gibt.");
+			}
+			mutableElements.add(new MutableElement(object, startTime, endTime, simulationVariant));
+		}
+		in.close();
+		return mutableElements;
 	}
 
 	/**
@@ -120,7 +152,7 @@ public abstract class MutableSetStorage {
 	}
 
 	/**
-	 * Löscht Objekte eienr angegebenen Simulation permanent und vollständig aus dieser Menge (z. B. beim Beenden einer Simulation)
+	 * Löscht Objekte einer angegebenen Simulation permanent und vollständig aus dieser Menge (z. B. beim Beenden einer Simulation)
 	 *
 	 * @param simulationVariant Simulationsvariante
 	 * @return Liste mit gelöschten Objekten
@@ -187,7 +219,7 @@ public abstract class MutableSetStorage {
 	 * Gibt alle bisher gespeicherten Elemente (auch ungültige/gelöschte) zurück. Die Elemente sollen in der Reihenfolge zurückgegeben
 	 * werden, wie sie in der Datei stehen.
 	 * <p>
-	 * Die zurückgebenene Liste wird vom Aufrufer ggf. modifiziert, darf also nicht von der implementierenden Klasse gecacht werden.
+	 * Die zurückgegebene Liste wird vom Aufrufer ggf. modifiziert, darf also nicht von der implementierenden Klasse gecacht werden.
 	 *
 	 * @return Liste mit allen Elementen des Sets (enthält Objektreferenz, Gültigkeit, Simulationsvariante)
 	 */

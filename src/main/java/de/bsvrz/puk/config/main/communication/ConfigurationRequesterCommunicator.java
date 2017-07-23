@@ -897,21 +897,18 @@ class ConfigurationRequesterCommunicator {
 				AuthentificationRequest r = (AuthentificationRequest)request;
 
 				_debug.finer("AUTHENTIFICATION_REQUEST_TYPE: " + r.getUserName() + ":");
-				Iterator<SystemObject> i = _dataModel.getType("typ.benutzer").getObjects().iterator();
 				try {
-					while(i.hasNext()) {
-						SystemObject benutzer = i.next();
-						if(r.getUserName().equals(benutzer.getName())) {
-							// answer = new AuthentificationAnswer(benutzer.getId());
-							_debug.finer(" gefunden, id " + benutzer.getId());
-							// Wenn der Benutzer nicht identifiziert werden kann, wird eine Exception geworfen
-							_authentication.isValidUser(
-									r.getUserName(), r.getEncriptedPasswort(), r.getAuthentificationText(), r.getAuthentificationProcessName()
-							);
-							answer = new AuthentificationAnswer(benutzer.getId());
-							break;
-						}
-					} // while über alle Benutzer
+					SystemObject benutzer = _authentication.getUserObject(r.getUserName());
+					if(benutzer != null) {
+						// answer = new AuthentificationAnswer(benutzer.getId());
+						_debug.finer(" gefunden, id " + benutzer.getId());
+						// Wenn der Benutzer nicht identifiziert werden kann, wird eine Exception geworfen
+						_authentication.isValidUser(
+								r.getUserName(), r.getEncriptedPasswort(), r.getAuthentificationText(), r.getAuthentificationProcessName()
+						);
+						answer = new AuthentificationAnswer(benutzer.getId());
+						break;
+					}
 
 					if(answer == null) {
 						answer = new AuthentificationAnswer(-1);

@@ -44,6 +44,7 @@ import java.io.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
 
@@ -1222,7 +1223,7 @@ public class ConfigAreaFile implements ConfigurationAreaFile, HeaderInfo {
 	/**
 	 * Iteriert über alle Objekte in diesem Bereich.
 	 *
-	 * @param consumer Java-8-Style Consumer, an den jedes gefundene Objekt übergeben wird
+	 * @param consumer Consumer, an den jedes gefundene Objekt übergeben wird
 	 */
 	@Override
 	public void forEach(Consumer<? super SystemObjectInformationInterface> consumer) {
@@ -1238,20 +1239,16 @@ public class ConfigAreaFile implements ConfigurationAreaFile, HeaderInfo {
 	/**
 	 * Iteriert über alle Konfigurationsobjekte in den NGA-Blöcken in diesem Bereich.
 	 *
-	 * @param consumer Java-8-Style Consumer, an den jedes gefundene Objekt übergeben wird
+	 * @param consumer Consumer, an den jedes gefundene Objekt übergeben wird
 	 */
 	@Override
 	public void forEachOldConfigurationObject(final Consumer<? super ConfigurationObjectInfo> consumer) {
-		Consumer<SystemObjectInformationInterface> converter = new Consumer<SystemObjectInformationInterface>() {
-			@Override
-			public void accept(final SystemObjectInformationInterface obj) {
-				if(obj instanceof ConfigurationObjectInfo) {
-					ConfigurationObjectInfo objectInfo = (ConfigurationObjectInfo) obj;
-					consumer.accept(objectInfo);
-				}
-				else {
-					throw new IllegalStateException("NGA-Block enthält dynamische Objekte");
-				}
+		Consumer<SystemObjectInformationInterface> converter = obj -> {
+			if(obj instanceof ConfigurationObjectInfo) {
+				consumer.accept((ConfigurationObjectInfo) obj);
+			}
+			else {
+				throw new IllegalStateException("NGA-Block enthält dynamische Objekte");
 			}
 		};
 		forEachObjects(_headerEnd, _startOldDynamicObjects + _headerEnd, converter);
@@ -1264,16 +1261,12 @@ public class ConfigAreaFile implements ConfigurationAreaFile, HeaderInfo {
 	 */
 	@Override
 	public void forEachOldDynamicObject(final Consumer<? super DynamicObjectInfo> consumer) {
-		Consumer<SystemObjectInformationInterface> converter = new Consumer<SystemObjectInformationInterface>() {
-			@Override
-			public void accept(final SystemObjectInformationInterface obj) {
-				if(obj instanceof DynamicObjectInfo) {
-					DynamicObjectInfo objectInfo = (DynamicObjectInfo) obj;
-					consumer.accept(objectInfo);
-				}
-				else {
-					throw new IllegalStateException("NGDyn-Block enthält Konfigurationsobjekte");
-				}
+		Consumer<SystemObjectInformationInterface> converter = obj -> {
+			if(obj instanceof DynamicObjectInfo) {
+				consumer.accept((DynamicObjectInfo) obj);
+			}
+			else {
+				throw new IllegalStateException("NGDyn-Block enthält Konfigurationsobjekte");
 			}
 		};
 		forEachObjects(_startOldDynamicObjects + _headerEnd, _startIdIndex + _headerEnd, converter);

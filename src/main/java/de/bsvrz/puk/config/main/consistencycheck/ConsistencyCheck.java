@@ -416,6 +416,16 @@ public class ConsistencyCheck {
 								for(Attribute attribute : attributes) {
 									final AttributeType attributeType = attribute.getAttributeType();
 									if(attributeType instanceof AttributeListDefinition) continue;
+									if(attributeType == null) {
+										result.addEntry(new ConsistencyCheckResultEntry(
+												ConsistencyCheckResultEntryType.INTERFERENCE_ERROR,
+												configurationObject.getConfigurationArea(),
+												new SystemObject[]{configurationObject, attribute, attributeType},
+												"Der Typ des Attributs '" + attribute.getName() + " in der Attributmenge '" +
+														attributeSet.getPidOrNameOrId() + "' ist nicht ermittelbar."
+										));
+										continue;
+									}
 									String defaultValue = attribute.getDefaultAttributeValue();
 									if(defaultValue == null) {
 										defaultValue = attributeType.getDefaultAttributeValue();

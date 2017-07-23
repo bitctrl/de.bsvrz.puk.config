@@ -68,6 +68,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Diese Klasse stellt alle Methoden zur Verfügung, um die Benutzer eines Datenverteilers eindeutig zu identifizieren. Es werden weitere Methoden zur Verfügung
@@ -85,7 +86,7 @@ import java.util.*;
 public class ConfigAuthentication implements Authentication {
 
 	/** Als Schlüssel dient der Benutzername (String) als Value werden alle Informationen, die zu einem Benutzer gespeichert wurden, zurückgegeben. */
-	private final Map<String, UserAccount> _userAccounts = new HashMap<String, UserAccount>();
+	private final Map<String, UserAccount> _userAccounts = new HashMap<>();
 
 	/** XML-Datei, wird zum anlagen einer Sicherheitskopie gebraucht */
 	private final File _xmlFile;
@@ -97,7 +98,7 @@ public class ConfigAuthentication implements Authentication {
 	private final Document _xmlDocument;
 
 	/** Speichert die Basis der Verzeichnisse für die Konfigurationsbereiche. */
-	private URI _uriBase;
+	private final URI _uriBase;
 
 	/**
 	 * Diese Liste speichert alle Texte, die mit {@link #getText} erzeugt wurden. Die Texte werden immer an das Ender der Liste eingefügt. Wird ein Text empfangen,
@@ -107,10 +108,10 @@ public class ConfigAuthentication implements Authentication {
 	 * <p>
 	 * Die Liste ist nicht synchronisiert.
 	 */
-	private final LinkedList<String> _randomText = new LinkedList<String>();
+	private final LinkedList<String> _randomText = new LinkedList<>();
 
 	/** Wird benötigt um bei den entsprechenden Konfigurationsbereichen neue Benutzer anzulegen */
-	private DataModel _dataModel;
+	private final DataModel _dataModel;
 
 	private final FileLock _lockAuthenticationFile;
 
@@ -199,15 +200,10 @@ public class ConfigAuthentication implements Authentication {
 				// Hat der Benutzer Admin-Rechte
 				final boolean admin;
 
-				if("ja".equals(element.getAttribute("admin").toLowerCase())) {
-					admin = true;
-				}
-				else {
-					admin = false;
-				}
+				admin = "ja".equals(element.getAttribute("admin").toLowerCase());
 
 				// Alle Einmal-Passwörter des Accounts (auch die schon benutzen)
-				final List<SingleServingPassword> allSingleServingPasswords = new ArrayList<SingleServingPassword>();
+				final List<SingleServingPassword> allSingleServingPasswords = new ArrayList<>();
 
 				// Einmal-Passwort Liste
 				final NodeList xmlSingleServingPasswordList = element.getElementsByTagName("autorisierungspasswort");
@@ -222,12 +218,7 @@ public class ConfigAuthentication implements Authentication {
 					final int index = Integer.parseInt(xmlSingleServingPassword.getAttribute("passwortindex"));
 					// Ist das Passwort noch gültig (ja oder nein)
 					final boolean valid;
-					if("ja".equals(xmlSingleServingPassword.getAttribute("gueltig").toLowerCase())) {
-						valid = true;
-					}
-					else {
-						valid = false;
-					}
+					valid = "ja".equals(xmlSingleServingPassword.getAttribute("gueltig").toLowerCase());
 					allSingleServingPasswords.add(new SingleServingPassword(xmlSingleServingPasswort, index, valid, xmlSingleServingPassword));
 				} // Alle Einmal-Passwörter
 
@@ -246,6 +237,7 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+	@Override
 	@Deprecated
 	public void isValidUser(final String username, final byte[] encryptedPassword, final String authentificationText, final String authentificationProcessName)
 			throws Exception {
@@ -272,10 +264,11 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+	@Override
 	@Deprecated
 	public byte[] getText() {
 		final Random rand = new Random();
-		final Long randomLong = new Long(rand.nextLong());
+		final Long randomLong = rand.nextLong();
 
 		synchronized(_randomText) {
 			// Der Wert 100 wurde willkürlich gewählt
@@ -288,6 +281,7 @@ public class ConfigAuthentication implements Authentication {
 		} // synch
 	}
 
+	@Override
 	public void close() {
 		try {
 			try {
@@ -344,6 +338,7 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws RequestException Fehler in der Anfrage
 	 * @throws ConfigurationTaskException Fehler beim Ausführen der Anweisung
 	 */
+	@Override
 	@Deprecated
 	public int processTask(String usernameCustomer, byte[] encryptedMessage, String authentificationProcessName)
 			throws RequestException, ConfigurationTaskException {
@@ -591,7 +586,7 @@ public class ConfigAuthentication implements Authentication {
 	 */
 	private Collection<DataAndATGUsageInformation> readDataAndATGUsageInformation(final Deserializer deserializer) throws IOException {
 		final int numberOfPackets = deserializer.readInt();
-		final ArrayList<DataAndATGUsageInformation> result = new ArrayList<DataAndATGUsageInformation>(numberOfPackets);
+		final ArrayList<DataAndATGUsageInformation> result = new ArrayList<>(numberOfPackets);
 
 		for(int i = 0; i < numberOfPackets; i++){
 			final AttributeGroupUsage attributeGroupUsage = (AttributeGroupUsage)deserializer.readObjectReference(_dataModel);
@@ -678,11 +673,11 @@ public class ConfigAuthentication implements Authentication {
 	 * @param newUserName       Name des neuen Benutzers
 	 * @param newUserPassword   Passwort des neuen Benutzers
 	 * @param admin             Rechte des neuen Benutzers (true = Adminrechte; false = normaler Benutzerrechte)
-	 * @param newUserPid        Pid, die der neue Benutzer erhalten soll. Wird ein Leerstring ("") übergeben, so bekommt der Benutzer keine expliziete Pid
+	 * @param newUserPid        Pid, die der neue Benutzer erhalten soll. Wird ein Leerstring ("") übergeben, so bekommt der Benutzer keine explizite Pid
 	 * @param configurationArea Pid des Konfigurationsbereichs, in dem der neue Benutzer angelegt werden soll
 	 * @param data              Konfigurierende Datensätze, die angelegt werden sollen (falls leere Liste oder <code>null</code> werden keine Daten angelegt)
 	 *
-	 * @throws ConfigurationTaskException Der neue Benutzer durfte nicht anglegt werden (Keine Rechte, Bentuzer bereits vorhanden)
+	 * @throws ConfigurationTaskException Der neue Benutzer durfte nicht anglegt werden (Keine Rechte, Benutzer bereits vorhanden)
 	 * @throws RequestException           technischer Fehler beim Zugriff auf die XML-Datei
 	 *
 	 * @see ConfigurationArea#createDynamicObject(DynamicObjectType, String, String, Collection)
@@ -793,7 +788,7 @@ public class ConfigAuthentication implements Authentication {
 		}
 		final Element xmlObject = createXMLUserAccount(newUserName, newUserPassword, newUserRightsString);
 
-		final UserAccount newUser = new UserAccount(newUserName, newUserPassword, admin, new ArrayList<SingleServingPassword>(), xmlObject);
+		final UserAccount newUser = new UserAccount(newUserName, newUserPassword, admin, new ArrayList<>(), xmlObject);
 
 		synchronized(_xmlDocument) {
 			// Das neue Objekt in die Liste der bestehenden einfügen
@@ -817,7 +812,7 @@ public class ConfigAuthentication implements Authentication {
 	 */
 	private boolean userHasObject(final String username, final String pid) {
 
-		if(!"".equals(pid)) {
+		if(pid != null && !pid.isEmpty()) {
 			// Es wurde eine Pid übergeben, gibt es zu der Pid ein Objekt
 			final SystemObject user = _dataModel.getObject(pid);
 			if(user != null) {
@@ -837,16 +832,7 @@ public class ConfigAuthentication implements Authentication {
 			}
 		}
 		else {
-			// Es wurde keine Pid angegeben, es müssen alle Benutzer betrachtet werden
-			Iterator i = _dataModel.getType("typ.benutzer").getObjects().iterator();
-			while(i.hasNext()) {
-				// Objekt, das in der Konfiguration gespeichert ist und einen Benutzer darstellt
-				final SystemObject configUser = (SystemObject)i.next();
-				if(configUser.getName().equals(username)) {
-					return true;
-				}
-			} // while über alle Benutzer
-			return false;
+			return getUserObject(username) != null;
 		}
 	}
 
@@ -1056,22 +1042,14 @@ public class ConfigAuthentication implements Authentication {
 	}
 
 
+	@Override
 	public SrpVerifierAndUser getSrpVerifierData(final String authenticatedUser, String userName, final int passwordIndex) throws ConfigurationTaskException {
 
 		if(!isAdmin(authenticatedUser) && !authenticatedUser.equals(userName)) {
 			throw new ConfigurationTaskException("Der Benutzer hat nicht die nötigen Rechte");
 		}
-		
-		UserLogin userLogin = UserLogin.notAuthenticated();
-		if(_userAccounts.containsKey(userName)) {
-			for(SystemObject systemObject : _dataModel.getType("typ.benutzer").getObjects()) {
-				if(systemObject.getName().equals(userName)) {
-					userLogin = UserLogin.user(systemObject.getId());
-				}
-			}
-		}
 
-		return getVerifier(userName, userLogin, passwordIndex);
+		return getVerifier(userName, getUserLogin(userName), passwordIndex);
 	}
 
 	@Override
@@ -1111,6 +1089,85 @@ public class ConfigAuthentication implements Authentication {
 		}
 	}
 
+
+	public UserLogin getUserLogin(final String userName) {
+		if(_userAccounts.containsKey(userName)) {
+			SystemObject userObject = getUserObject(userName);
+			if(userObject != null){
+				return UserLogin.user(userObject.getId());
+			}
+		}
+		return UserLogin.notAuthenticated();
+	}
+	
+	@Override
+	public SystemObject getUserObject(final String userName) {
+		List<SystemObject> matchingUsers = new ArrayList<>();
+		for(final SystemObject userObject : _dataModel.getType("typ.benutzer").getObjects()) {
+			// Objekt, das in der Konfiguration gespeichert ist und einen Benutzer darstellt
+			if(userObject.getName().equals(userName)) {
+				matchingUsers.add(userObject);
+			}
+		}
+		switch(matchingUsers.size()){
+			case 0: 
+				return null;
+			case 1:
+				return matchingUsers.get(0);
+		}
+
+		List<SystemObject> localUsers = matchingUsers.stream().filter(this::isLocalUser).collect(Collectors.toList());
+		matchingUsers.sort(Comparator.comparing(SystemObject::getPidOrId));
+		localUsers.sort(Comparator.comparing(SystemObject::getPidOrId));
+		StringBuilder stringBuilder = new StringBuilder().append("Zum Benutzernamen \"")
+				.append(userName)
+				.append("\" gibt es ")
+				.append(matchingUsers.size())
+				.append(" SystemObjekte, davon sind ")
+				.append(localUsers.size())
+				.append(" der lokalen AOE zugeordnet: ");
+		for(SystemObject matchingUser : matchingUsers) {
+			stringBuilder.append("\n")
+					.append(matchingUser.getPidOrId())
+					.append(" (").append(matchingUser.getConfigurationArea().getConfigurationAuthority().getPidOrId()).append(")");
+		}
+		if(localUsers.size() == 1){
+			stringBuilder.append("\nDer Benutzer des lokalen AOE ")
+					.append(_dataModel.getConfigurationAuthority().getPidOrId())
+					.append(" wird verwendet");
+			_debug.warning(stringBuilder.toString());
+			return localUsers.get(0);
+		}
+		else {
+			if(localUsers.size() > 0){
+				return chooseRandomUser(localUsers, stringBuilder);
+			}
+			else {
+				return chooseRandomUser(matchingUsers, stringBuilder);		
+			}
+		}
+	}
+
+	/**
+	 * Wählt einen zufälligen Benutzer und erzeugt eine Debug-Meldung
+	 */
+	private static SystemObject chooseRandomUser(final List<SystemObject> userList, final StringBuilder stringBuilder) {
+		stringBuilder.append("\nEs sollte unter dem lokalen AOE genau ein Benutzerobjekt pro Benutzernamen geben.\nDer Benutzer \"")
+				.append(userList.get(0).getPidOrId())
+				.append("\" wurde willkürlich ausgewählt.");
+		_debug.warning(stringBuilder.toString());
+		return userList.get(0);
+	}
+
+	/**
+	 * Prüft, ob ein Benutzerobjekt unter der lokalen AOE konfiguriert wurde
+	 * @param userObject Benutzerobjekt
+	 * @return true: Unte der lokalen AOE, sonst false
+	 */
+	private boolean isLocalUser(final SystemObject userObject) {
+		return Objects.equals(userObject.getConfigurationArea().getConfigurationAuthority(), _dataModel.getConfigurationAuthority());
+	}
+
 	private SrpVerifierAndUser getVerifier(final String userName, final UserLogin userLogin, final int passwordIndex) {
 		UserAccount userAccount = _userAccounts.get(userName);
 		if(userAccount == null) {
@@ -1124,10 +1181,7 @@ public class ConfigAuthentication implements Authentication {
 			// Passenden SRP-Verifier erzeugen, damit der Benutzer sich authentifizieren kann.
 			// Dem Datenverteiler ist es egal, ob dieser Verifier in der benutzerverwaltung.xml gespeichert war, oder hier erzeugt wurde.
 			// Tatsächlich kann er es gar nicht unterscheiden.
-			
-			// ClientCredentials.ofString bewirkt, dass in der benutzerverwaltung.xml auch der Login-Token x drin stehen kann.
-			// das ist zwar nirgendwo so spezifiziert, aber eigentlich spricht da nicht wirklich was gegen
-			// und es ist in jedem Fall besser als Klartext
+
 			ClientCredentials clientCredentials = userAccount.getClientCredentials(passwordIndex);
 			if(clientCredentials != null) {
 				return new SrpVerifierAndUser(userLogin, fakeVerifier(userName, secretHash(userName, passwordIndex), clientCredentials), true);
@@ -1189,9 +1243,7 @@ public class ConfigAuthentication implements Authentication {
 	 * @throws ConfigurationChangeException Fehler beim durchführen der Aktion
 	 */
 	private void deleteUserObject(final String userToDelete) throws ConfigurationChangeException {
-		Iterator i = _dataModel.getType("typ.benutzer").getObjects().iterator();
-		while(i.hasNext()) {
-			final SystemObject configUser = (SystemObject)i.next();
+		for(final SystemObject configUser : _dataModel.getType("typ.benutzer").getObjects()) {
 			if(configUser.getName().equals(userToDelete)) {
 				configUser.invalidate();
 			}
@@ -1221,8 +1273,8 @@ public class ConfigAuthentication implements Authentication {
 			String publicID = null;
 			String systemID = null;
 			if(documentType != null) {
-				publicID = _xmlDocument.getDoctype().getPublicId();
-				systemID = _xmlDocument.getDoctype().getSystemId();
+				publicID = documentType.getPublicId();
+				systemID = documentType.getSystemId();
 			}
 			if(publicID != null) {
 				transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, publicID);
@@ -1274,24 +1326,15 @@ public class ConfigAuthentication implements Authentication {
 		}
 
 		// Datei kopieren
-			final FileOutputStream fileOutputStream = new FileOutputStream(new File(targetDirectory, fileName));
-			try {
-				final FileInputStream inputStream = new FileInputStream(_xmlFile);
-				try {
-
-					byte[] buf = new byte[1024];
-					int len;
-					while((len = inputStream.read(buf)) > 0) {
-						fileOutputStream.write(buf, 0, len);
-					}
-				}
-				finally {
-					inputStream.close();
+		try(FileOutputStream fileOutputStream = new FileOutputStream(new File(targetDirectory, fileName))) {
+			try(FileInputStream inputStream = new FileInputStream(_xmlFile)) {
+				byte[] buf = new byte[1024];
+				int len;
+				while((len = inputStream.read(buf)) > 0) {
+					fileOutputStream.write(buf, 0, len);
 				}
 			}
-			finally {
-				fileOutputStream.close();
-			}
+		}
 	}
 
 	/**
@@ -1368,7 +1411,7 @@ public class ConfigAuthentication implements Authentication {
 		 * Passwort befindet sich bereits in dieser Menge, dann darf das neue Einmal-Passwort nicht angelegt werden.
 		 * Dadurch wird verhindert, dass ein Passwort oder Überprüfungscode doppelt verwendet wird.
 		 */
-		private final Set<String> _allSingleServingPasswords = new HashSet<String>();
+		private final Set<String> _allSingleServingPasswords = new HashSet<>();
 
 		/**
 		 * Speichert den größten Index, der bisher für ein Einmal-Passwort benutzt wurde. Das nächste Einmal-Passwort hätte als Index
@@ -1611,7 +1654,10 @@ public class ConfigAuthentication implements Authentication {
 		 * @throws InvalidKeyException
 		 * @throws FileNotFoundException
 		 * @throws TransformerException
+		 * 
+		 * @deprecated Wird nur von der alten Hmac-basierten Authentifizierung benutzt
 		 */
+		@Deprecated
 		public synchronized void useSingleServingPassword(byte[] encryptedPassword, String authentificationText, String authentificationProcessName)
 				throws NoSuchAlgorithmException, UnsupportedEncodingException, InvalidKeyException, FileNotFoundException, TransformerException {
 
@@ -1808,6 +1854,7 @@ public class ConfigAuthentication implements Authentication {
 		 * @throws SAXException Bei Fehlern beim Zugriff auf externe Entities.
 		 * @throws IOException
 		 */
+		@Override
 		public InputSource resolveEntity(String publicId, String systemId) throws SAXException, IOException {
 			if(publicId != null && publicId.equals("-//K2S//DTD Authentifizierung//DE")) {
 				URL url = this.getClass().getResource("authentication.dtd");

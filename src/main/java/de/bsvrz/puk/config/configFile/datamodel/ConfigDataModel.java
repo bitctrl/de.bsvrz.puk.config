@@ -1879,12 +1879,7 @@ public class ConfigDataModel implements DataModel, ConfigurationControl {
 			final Set<Long> typeIds = new HashSet<Long>();
 
 			// Ersetzbar durch Lambda für Java 8
-			areaFile.forEachOldDynamicObject(new Consumer<DynamicObjectInfo>() {
-				                                 @Override
-				                                 public void accept(final DynamicObjectInfo dynamicObjectInfo) {
-					                                 typeIds.add(dynamicObjectInfo.getTypeId());
-				                                 }
-			                                 });
+			areaFile.forEachOldDynamicObject(dynamicObjectInfo -> typeIds.add(dynamicObjectInfo.getTypeId()));
 
 			final Set<Long> referencedObjects = collectReferences(typeIds);
 
@@ -1893,16 +1888,13 @@ public class ConfigDataModel implements DataModel, ConfigurationControl {
 			final List<Long> objectsToDelete = new ArrayList<Long>();
 
 			// Ersetzbar durch Lambda für Java 8
-			areaFile.forEachOldDynamicObject(new Consumer<DynamicObjectInfo>() {
-				                                 @Override
-				                                 public void accept(final DynamicObjectInfo dynamicObjectInfo) {
-					                                 // Wenn die Parameter das Löschen erlauben und das Objekt nicht referenziert wird, löschen
-					                                 if(!referencedObjects.contains(dynamicObjectInfo.getID()) && spec.canDeleteObject(dynamicObjectInfo)){
-						                                 _debug.fine("Bereinigtes Objekt", dynamicObjectInfo);
-						                                 objectsToDelete.add(dynamicObjectInfo.getID());
-					                                 }
-				                                 }
-			                                 });
+			areaFile.forEachOldDynamicObject(dynamicObjectInfo -> {
+				// Wenn die Parameter das Löschen erlauben und das Objekt nicht referenziert wird, löschen
+				if(!referencedObjects.contains(dynamicObjectInfo.getID()) && spec.canDeleteObject(dynamicObjectInfo)){
+					_debug.fine("Bereinigtes Objekt", dynamicObjectInfo);
+					objectsToDelete.add(dynamicObjectInfo.getID());
+				}
+			});
 
 			// Gefundene Objekte als löschbar markieren (für den nächste Neust
 			if(!objectsToDelete.isEmpty()) {
@@ -2039,7 +2031,7 @@ public class ConfigDataModel implements DataModel, ConfigurationControl {
 	/**
 	 * Prüft, ob ein Objekt in der angegebenen Simulation gültig ist
 	 * @param systemObject Zu prüfendes Objekt
-	 * @param simulationVariant Sumulationsvariante der zu prüfenden Simulation oder 0 falls keine Simulation verwendet wird
+	 * @param simulationVariant Simulationsvariante der zu prüfenden Simulation oder 0 falls keine Simulation verwendet wird
 	 * @return true: Objekt ist gültig, false sonst. Insbesondere ist ein Objekt dann gültig wenn
 	 * <ul>
 	 *     <li>Keine Simulation verwendet wird und das Objekt auch nicht simuliert ist
